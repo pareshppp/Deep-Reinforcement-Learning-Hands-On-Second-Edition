@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from IPython.core.debugger import set_trace
 
 HIDDEN_SIZE = 128
 BATCH_SIZE = 16
@@ -17,16 +18,18 @@ PERCENTILE = 70
 class DiscreteOneHotWrapper(gym.ObservationWrapper):
     def __init__(self, env):
         super(DiscreteOneHotWrapper, self).__init__(env)
-        assert isinstance(env.observation_space,
-                          gym.spaces.Discrete)
-        shape = (env.observation_space.n, )
-        self.observation_space = gym.spaces.Box(
-            0.0, 1.0, shape, dtype=np.float32)
+        assert isinstance(env.observation_space, gym.spaces.Discrete)
+        shape = (env.observation_space.n, ) # 16
+        self.observation_space = gym.spaces.Box(low=0.0, high=1.0, shape=shape, dtype=np.float32)
+            # real value between 0.0 to 1.0 of given shape and dtype
+            # shape=16, so array of 16 values boxed between 0 to 1
 
-    def observation(self, observation):
+    def observation(self, obs):
         res = np.copy(self.observation_space.low)
-        res[observation] = 1.0
-        return res
+            # res = array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.], dtype=float32)
+            # array of 16 values of zeros
+        res[obs] = 1.0 # set "obs" index as 1.0
+        return res # one-hot encoded output
 
 
 class Net(nn.Module):

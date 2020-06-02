@@ -73,6 +73,7 @@ def iterate_batches(env, net, batch_size):
 
 def filter_batch(batch, percentile):
     filter_fun = lambda s: s.reward * (GAMMA ** len(s.steps))
+        # the longer it runs, the smaller the reward
     disc_rewards = list(map(filter_fun, batch))
     reward_bound = np.percentile(disc_rewards, percentile)
 
@@ -81,10 +82,8 @@ def filter_batch(batch, percentile):
     elite_batch = []
     for example, discounted_reward in zip(batch, disc_rewards):
         if discounted_reward > reward_bound:
-            train_obs.extend(map(lambda step: step.observation,
-                                 example.steps))
-            train_act.extend(map(lambda step: step.action,
-                                 example.steps))
+            train_obs.extend(map(lambda step: step.observation, example.steps))
+            train_act.extend(map(lambda step: step.action, example.steps))
             elite_batch.append(example)
 
     return elite_batch, train_obs, train_act, reward_bound
@@ -103,27 +102,23 @@ if __name__ == "__main__":
     writer = SummaryWriter(comment="-frozenlake-tweaked")
 
     full_batch = []
-    for iter_no, batch in enumerate(iterate_batches(
-            env, net, BATCH_SIZE)):
-        reward_mean = float(np.mean(list(map(
-            lambda s: s.reward, batch))))
-        full_batch, obs, acts, reward_bound = \
-            filter_batch(full_batch + batch, PERCENTILE)
+    for iter_no, batch in enumerate(iterate_batches(env, net, BATCH_SIZE)):
+        reward_mean = float(np.mean(list(map(lambda s: s.reward, batch))))
+        full_batch, obs, acts, reward_bound = filter_batch(full_batch + batch, PERCENTILE)
+        # skip iteration if full_batch is empty
         if not full_batch:
             continue
         obs_v = torch.FloatTensor(obs)
         acts_v = torch.LongTensor(acts)
-        full_batch = full_batch[-500:]
+        full_batch = full_batch[-500:] # keep 500 most recent instances
 
         optimizer.zero_grad()
         action_scores_v = net(obs_v)
         loss_v = objective(action_scores_v, acts_v)
         loss_v.backward()
         optimizer.step()
-        print("%d: loss=%.3f, rw_mean=%.3f, "
-              "rw_bound=%.3f, batch=%d" % (
-            iter_no, loss_v.item(), reward_mean,
-            reward_bound, len(full_batch)))
+        print("%d: loss=%.3f, rw_mean=%.3f, rw_bound=%.3f, batch=%d" % (
+            iter_no, loss_v.item(), reward_mean, reward_bound, len(full_batch)))
         writer.add_scalar("loss", loss_v.item(), iter_no)
         writer.add_scalar("reward_mean", reward_mean, iter_no)
         writer.add_scalar("reward_bound", reward_bound, iter_no)

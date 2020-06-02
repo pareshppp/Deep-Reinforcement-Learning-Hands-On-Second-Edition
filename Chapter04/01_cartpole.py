@@ -8,11 +8,14 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from IPython.core.debugger import set_trace
 
 HIDDEN_SIZE = 128
 BATCH_SIZE = 16
-PERCENTILE = 70
+PERCENTILE = 50
 
+Episode = namedtuple('Episode', field_names=['reward', 'steps'])
+EpisodeStep = namedtuple('EpisodeStep', field_names=['observation', 'action'])
 
 class Net(nn.Module):
     def __init__(self, obs_size, hidden_size, n_actions):
@@ -25,10 +28,6 @@ class Net(nn.Module):
 
     def forward(self, x):
         return self.net(x)
-
-
-Episode = namedtuple('Episode', field_names=['reward', 'steps'])
-EpisodeStep = namedtuple('EpisodeStep', field_names=['observation', 'action'])
 
 
 def iterate_batches(env, net, batch_size):
@@ -78,7 +77,7 @@ def filter_batch(batch, percentile):
 
 if __name__ == "__main__":
     env = gym.make("CartPole-v0")
-    # env = gym.wrappers.Monitor(env, directory="mon", force=True)
+    #env = gym.wrappers.Monitor(env, directory="mon", force=True)
     obs_size = env.observation_space.shape[0]
     n_actions = env.action_space.n
 
@@ -87,16 +86,14 @@ if __name__ == "__main__":
     optimizer = optim.Adam(params=net.parameters(), lr=0.01)
     writer = SummaryWriter(comment="-cartpole")
 
-    for iter_no, batch in enumerate(iterate_batches(
-            env, net, BATCH_SIZE)):
-        obs_v, acts_v, reward_b, reward_m = \
-            filter_batch(batch, PERCENTILE)
+    for iter_no, batch in enumerate(iterate_batches(env, net, BATCH_SIZE)):
+        obs_v, acts_v, reward_b, reward_m = filter_batch(batch, PERCENTILE)
         optimizer.zero_grad()
         action_scores_v = net(obs_v)
         loss_v = objective(action_scores_v, acts_v)
         loss_v.backward()
         optimizer.step()
-        print("%d: loss=%.3f, reward_mean=%.1f, rw_bound=%.1f" % (
+        print("%d: loss=%.3f, reward_mean=%.1f, reward_bound=%.1f" % (
             iter_no, loss_v.item(), reward_m, reward_b))
         writer.add_scalar("loss", loss_v.item(), iter_no)
         writer.add_scalar("reward_bound", reward_b, iter_no)
